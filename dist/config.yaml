@@ -1,0 +1,195 @@
+app:
+  name: "FormUL Analyzer"
+  version: "1.0.0"
+
+domaines:
+  Batterie:
+    prefixes: ["BMS_"]
+    canaux_cles:
+      - BMS_TotVolt
+      - BMS_AvgCur
+      - BMS_power
+      - BMS_SOC
+      - BMS_Vsense
+
+  Moteurs:
+    prefixes: ["DI1", "DI2", "DI3", "DI4"]
+    canaux_cles:
+      - DI1_RPM
+      - DI2_RPM
+      - DI3_RPM
+      - DI4_RPM
+      - DI1_AC
+      - DI2_AC
+      - DI3_AC
+      - DI4_AC
+
+  Thermique:
+    prefixes: ["CANMOD_", "RCP_Temp", "DI1CTL", "DI2CTL", "DI3CTL", "DI4CTL", "DI1MOT", "DI2MOT", "DI3MOT", "DI4MOT"]
+    canaux_cles:
+      - DI1CTL_Temp
+      - DI2CTL_Temp
+      - DI3CTL_Temp
+      - DI4CTL_Temp
+      - DI1MOT_Temp
+      - DI2MOT_Temp
+      - DI3MOT_Temp
+      - DI4MOT_Temp
+      - RCP_Temp_Mot_FL
+      - RCP_Temp_Mot_FR
+      - RCP_Temp_Mot_RL
+      - RCP_Temp_Mot_RR
+      - CANMOD_BLTemp
+      - CANMOD_BRTemp
+      - CANMOD_TLTemp
+      - CANMOD_TRTemp
+
+  Pedales:
+    prefixes: ["ACQ_", "VCU_APPS", "VCU_BSE", "VCU_SPS"]
+    canaux_cles:
+      - ACQ_apps
+      - ACQ_bse
+      - ACQ_Brake_Pedal_1_psi
+      - ACQ_Brake_Pedal_2_psi
+      - VCU_APPS
+      - VCU_BSE
+      - VCU_SPS
+
+  Systeme:
+    prefixes: ["VCU_", "State_", "DASH_"]
+    canaux_cles:
+      - VCU_AMS
+      - VCU_IMD
+      - VCU_BSPD_St
+      - VCU_HV_St
+      - VCU_Pump
+      - VCU_FAN
+      - State_Drive
+      - State_log
+      - DASH_LvVolt
+      - DASH_LvSOC
+      - BMS_ERROR
+
+erreurs:
+  prefixes: ["BMS_ERROR", "VCU_AMS", "VCU_IMD", "VCU_BSPD"]
+
+anomalies:
+  seuil_sigma: 2.5
+
+session:
+  dossier_data: "data/"
+  historique: "historique.json"
+  annotations: "annotations.json"
+
+seuils:
+  BMS_TotVolt:
+    min: 344
+    max: 408
+  BMS_AvgCur:
+    min: -55
+    max: 5
+  BMS_power:
+    min: -50
+    max: 5
+  BMS_SOC:
+    min: 5
+  ACQ_Brake_Pedal_1_psi:
+    max: 700
+  DI1CTL_Temp:
+    max: 85
+  DI2CTL_Temp:
+    max: 85
+  DI3CTL_Temp:
+    max: 85
+  DI4CTL_Temp:
+    max: 85
+  DI1MOT_Temp:
+    max: 80
+  DI2MOT_Temp:
+    max: 80
+  DI3MOT_Temp:
+    max: 80
+  DI4MOT_Temp:
+    max: 80
+
+# Fault codes — nouveaux noms RCP V3
+fault_codes:
+  BMS_ERROR:
+    0: "ok"
+    1: "erreur BMS"
+  VCU_AMS:
+    0: "ok"
+    1: "AMS fault (VCU)"
+  VCU_IMD:
+    0: "ok"
+    1: "IMD fault isolation (VCU)"
+  VCU_BSPD_St:
+    0: "ok"
+    1: "BSPD déclenché"
+  VCU_HV_St:
+    0: "ok"
+    1: "HV state fault"
+  DI1_Fault_Code:
+    0: "ok"
+    1: "surtension DC"
+    2: "sous-tension DC"
+    3: "erreur transistor (DRV)"
+    4: "surcourant AC"
+    5: "surchauffe contrôleur"
+    6: "surchauffe moteur"
+    7: "erreur câblage capteur"
+    8: "erreur générale capteur"
+  DI2_Fault_Code:
+    0: "ok"
+    1: "surtension DC"
+    2: "sous-tension DC"
+    3: "erreur transistor (DRV)"
+    4: "surcourant AC"
+    5: "surchauffe contrôleur"
+    6: "surchauffe moteur"
+    7: "erreur câblage capteur"
+    8: "erreur générale capteur"
+  DI3_Fault_Code:
+    0: "ok"
+    1: "surtension DC"
+    2: "sous-tension DC"
+    3: "erreur transistor (DRV)"
+    4: "surcourant AC"
+    5: "surchauffe contrôleur"
+    6: "surchauffe moteur"
+    7: "erreur câblage capteur"
+    8: "erreur générale capteur"
+  DI4_Fault_Code:
+    0: "ok"
+    1: "surtension DC"
+    2: "sous-tension DC"
+    3: "erreur transistor (DRV)"
+    4: "surcourant AC"
+    5: "surchauffe contrôleur"
+    6: "surchauffe moteur"
+    7: "erreur câblage capteur"
+    8: "erreur générale capteur"
+  BMS_ERROR_INTLCK_IN2_OPEN:
+    0: "ok"
+    1: "interlock IN2 ouvert"
+  BMS_ERROR_INTLCK_IN1_OPEN:
+    0: "ok"
+    1: "interlock IN1 ouvert"
+  BMS_ERROR_AIR_FAILED_TO_CLOSE:
+    0: "ok"
+    1: "AIR n'a pas fermé"
+  BMS_ERROR_IMD_NOT_OK:
+    0: "ok"
+    1: "IMD défaut isolation"
+  BMS_ERROR_CV:
+    0: "ok"
+    1: "tension cellule hors limites"
+  BMS_ERROR_THERMISTOR:
+    0: "ok"
+    1: "thermistance défectueuse"
+  BMS_ERROR_SENSOR_OVERCURRENT:
+    0: "ok"
+    1: "surcourant capteur"
+  BMS_ERROR_FAN:
+    0: "ok"
+    1: "ventilateur défectueux"
