@@ -12,7 +12,10 @@ def detecter_flags_erreur(mdf, canaux_disponibles):
         try:
             sig = mdf.get(canal)
             s = sig.samples.astype(float)
-            v = set(s)
+            s_valid = s[np.isfinite(s)]
+            if len(s_valid) == 0:
+                continue
+            v = set(s_valid)
             if v <= {0.0, 1.0} or (len(v) <= 8 and max(v) <= 255):
                 flags.append(canal)
         except Exception:
@@ -53,7 +56,12 @@ def calculer_zones_faute(mdf, flags_erreur):
     for f in flags_erreur:
         try:
             sig  = mdf.get(f)
-            vals = np.interp(grille, sig.timestamps, sig.samples.astype(float))
+            t_f  = sig.timestamps
+            s_f  = sig.samples.astype(float)
+            if len(t_f) == 0 or len(s_f) == 0:
+                continue
+            s_f  = np.where(np.isfinite(s_f), s_f, 0.0)
+            vals = np.interp(grille, t_f, s_f)
             mat.append((vals > 0.5).astype(int))
         except Exception:
             continue
@@ -105,9 +113,13 @@ def identifier_declencheurs(mdf, flags_erreur, zones_faute, fault_codes):
                 t_f, s_f = t[mask], s[mask]
                 if len(s_f) < 2:
                     continue
-                diffs = np.diff(s_f.astype(int))
+                s_f_clean = np.where(np.isfinite(s_f), s_f, 0.0)
+                diffs = np.diff(s_f_clean.astype(float))
                 for idx in np.where(diffs != 0)[0]:
-                    v_av, v_ap = int(s_f[idx]), int(s_f[idx + 1])
+                    v_av_f, v_ap_f = float(s_f_clean[idx]), float(s_f_clean[idx + 1])
+                    if not (np.isfinite(v_av_f) and np.isfinite(v_ap_f)):
+                        continue
+                    v_av, v_ap = int(v_av_f), int(v_ap_f)
                     if v_av == 0 and v_ap != 0:
                         dt   = float(t_f[idx + 1]) - debut
                         desc = fault_codes.get(flag, {}).get(v_ap)

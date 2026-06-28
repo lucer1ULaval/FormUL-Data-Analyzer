@@ -1,68 +1,76 @@
 MONO  = "'Consolas', 'Courier New', monospace"
 SANS  = "'Segoe UI', 'Arial', sans-serif"
 
-BG    = '#141414'
+# ── Backgrounds ──────────────────────────────────────────────────────────────
+BG    = '#0d0d0d'
 BG2   = '#111111'
-BG3   = '#1a1a1a'
-BG4   = '#202020'
-BG5   = '#0f0f0f'
+BG3   = '#161616'
+BG4   = '#1c1c1c'
+BG5   = '#0a0a0a'
 
-BORDER  = '#2a2a2a'
-BORDER2 = '#222222'
+# ── Borders ───────────────────────────────────────────────────────────────────
+BORDER  = '#222222'
+BORDER2 = '#2a2a2a'
 
-TEXT    = '#c8c8c8'
-DIM     = '#666666'
-DIM2    = '#3a3a3a'
-BRIGHT  = '#e8e8e8'
+# ── Text ──────────────────────────────────────────────────────────────────────
+TEXT    = '#d0d0d0'
+DIM     = '#5a5a5a'
+DIM2    = '#333333'
+BRIGHT  = '#efefef'
 
-ACCENT  = '#5a9fd4'
-ROUGE   = '#c04040'
-ORANGE  = '#b07828'
-VERT    = '#4a8a4a'
-JAUNE   = '#c8a020'
+# ── Accent / semantic ─────────────────────────────────────────────────────────
+ACCENT  = '#E31837'   # FormUL red (Université Laval)
+ACCENT2 = '#ff4455'   # lighter hover
+ROUGE   = '#c03030'
+ORANGE  = '#c07828'
+VERT    = '#4a9a4a'
+JAUNE   = '#c8a820'
+BLEU    = '#4488cc'
 
-# Couleurs traces session principale
+# ── Couleurs traces session 1 ─────────────────────────────────────────────────
 COULEURS = [
-    '#5b9bd5',
-    '#70ad47',
-    '#ed7d31',
-    '#ffc000',
-    '#9b59b6',
-    '#00b0d8',
-    '#e06070',
+    '#4f8fd4',
+    '#65b03f',
+    '#e07020',
+    '#f0b800',
+    '#9050c0',
+    '#00a8c8',
+    '#d05060',
 ]
 
-# Couleurs traces session 2 (desaturées)
+# ── Couleurs traces session 2 (désaturées) ────────────────────────────────────
 COULEURS_S2 = [
-    '#2d6fa8',
-    '#4a7a30',
-    '#a85520',
-    '#b08800',
-    '#6a3a86',
-    '#0080a8',
-    '#a04050',
+    '#2a5e9a',
+    '#3d7025',
+    '#9a4c10',
+    '#a07800',
+    '#5a2880',
+    '#006888',
+    '#803040',
 ]
 
-# Couleurs par domaine (sidebar groups)
+# ── Couleurs par domaine ──────────────────────────────────────────────────────
 COULEURS_DOMAINES = {
-    'Batterie':  '#5b9bd5',
-    'Moteurs':   '#70ad47',
-    'Thermique': '#ed7d31',
-    'Pedales':   '#ffc000',
-    'Systeme':   '#9b59b6',
+    'Batterie':  '#4f8fd4',
+    'Moteurs':   '#65b03f',
+    'Thermique': '#e07020',
+    'Pedales':   '#f0b800',
+    'Systeme':   '#9050c0',
 }
 
+# ── Vues disponibles ──────────────────────────────────────────────────────────
 VUES = [
-    {'label': 'channels',  'value': 'graphes'},
-    {'label': 'summary',   'value': 'resume'},
-    {'label': 'faults',    'value': 'erreurs'},
-    {'label': 'analysis',  'value': 'math'},
-    {'label': 'heatmap',   'value': 'heatmap'},
-    {'label': 'energy',    'value': 'energie'},
-    {'label': 'motors',    'value': 'motors'},
-    {'label': 'compare',   'value': 'comparaison'},
+    {'label': 'Channels',  'value': 'graphes',      'icon': '▤'},
+    {'label': 'Summary',   'value': 'resume',        'icon': '≡'},
+    {'label': 'Faults',    'value': 'erreurs',       'icon': '⚡'},
+    {'label': 'Analysis',  'value': 'math',          'icon': '∫'},
+    {'label': 'Heatmap',   'value': 'heatmap',       'icon': '▦'},
+    {'label': 'Energy',    'value': 'energie',       'icon': '⚡'},
+    {'label': 'Motors',    'value': 'motors',        'icon': '◎'},
+    {'label': 'Compare',   'value': 'comparaison',   'icon': '⇄'},
 ]
 
+# ── Détection de fautes ───────────────────────────────────────────────────────
 MOTS_CLES_ERREUR    = ['ERROR', 'ERR', 'FAULT', 'FAIL', 'BSPD', 'ALARM', 'WARN']
 CANAL_VITESSE       = 'Speed'
 CANAL_VITESSE_ALT   = 'RCP_GPS_Speed'
@@ -70,5 +78,6 @@ SEUIL_VITESSE       = 3.0
 SEUIL_COINCIDENCE   = 3
 FENETRE_DECLENCHEUR = 5.0
 
+# ── Conversion ────────────────────────────────────────────────────────────────
 RPM_TO_KMH   = 107.76
 POLES_PAIRES = 10

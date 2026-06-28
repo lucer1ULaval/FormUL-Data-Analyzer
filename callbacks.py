@@ -4,7 +4,8 @@ import base64, tempfile, os, json
 import asammdf
 import pandas as pd
 
-from constants import MONO, SANS, DIM, TEXT, BORDER, BG, COULEURS
+from constants import (MONO, SANS, DIM, TEXT, BORDER, BG, COULEURS, ACCENT, BRIGHT,
+                       BG3, BG4, BORDER2, VUES, COULEURS_DOMAINES)
 from ui import msg, layout_principal, layout_vue_libre
 from utils.mdf_loader import charger_config, charger_mdf, signal_vers_dataframe
 from fault_detection import detecter_flags_erreur, calculer_zones_faute, identifier_declencheurs
@@ -70,11 +71,21 @@ def _sauvegarder_layout(filename, canaux, vue):
 
 
 def _statusbar_content(plage):
-    def s(t): return html.Span(t, style={'fontFamily': SANS, 'fontSize': '10px', 'color': DIM})
+    def s(t, accent=False):
+        return html.Span(t, style={
+            'fontFamily': MONO, 'fontSize': '10px',
+            'color': ACCENT if accent else DIM,
+        })
     if plage:
-        return [s(f"t  {plage['debut']:.2f} → {plage['fin']:.2f} s"),
-                s(f"Δ {plage['fin']-plage['debut']:.2f} s")]
-    return [s("Full session")]
+        return [
+            s("◀ "),
+            s(f"{plage['debut']:.3f}s"),
+            html.Span(" → ", style={'color': DIM, 'fontFamily': MONO, 'fontSize': '10px'}),
+            s(f"{plage['fin']:.3f}s"),
+            html.Span("  |  ", style={'color': '#222', 'fontFamily': MONO, 'fontSize': '10px'}),
+            s(f"Δ {plage['fin']-plage['debut']:.3f}s", accent=True),
+        ]
+    return [s("● Full session")]
 
 
 def _construire_vue(vue, mdf, canaux_disponibles, flags_erreur,
@@ -131,16 +142,8 @@ def _liste_canaux_html(canaux, sel, domaines_data=None, type_checkbox='canal-che
             else:
                 sans_domaine.append(c)
 
-        domaine_couleurs = {
-            'Batterie':  '#5b9bd5',
-            'Moteurs':   '#70ad47',
-            'Thermique': '#ed7d31',
-            'Pedales':   '#ffc000',
-            'Systeme':   '#9b59b6',
-        }
-
         for dom, canaux_dom in groupes.items():
-            couleur_dom = domaine_couleurs.get(dom, '#555')
+            couleur_dom = COULEURS_DOMAINES.get(dom, '#555')
             nb_sel = sum(1 for c in canaux_dom if c in (sel or []))
             items.append(html.Div([
                 html.Div(style={
@@ -314,10 +317,12 @@ def register_callbacks(app):
         Input('input-recherche', 'value'),
         Input('store-canaux-selectionnes', 'data'),
         Input('store-domaines', 'data'),
+        Input('filtre-type', 'value'),
         prevent_initial_call=True
     )
-    def filtrer_canaux(recherche, canaux_sel, domaines_data):
-        return _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, 'canal-checkbox')
+    def filtrer_canaux(recherche, canaux_sel, domaines_data, filtre_type):
+        return _filtrer_canaux_logic(recherche, canaux_sel, domaines_data,
+                                     'canal-checkbox', filtre_type)
 
     # ── Liste canaux détachée ─────────────────────────────────────────────
     @app.callback(
@@ -325,10 +330,29 @@ def register_callbacks(app):
         Input('input-recherche-det', 'value'),
         Input('store-canaux-selectionnes-det', 'data'),
         Input('store-domaines-det', 'data'),
+        Input('filtre-type-det', 'value'),
         prevent_initial_call=True
     )
-    def filtrer_canaux_det(recherche, canaux_sel, domaines_data):
-        return _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, 'canal-checkbox-det')
+    def filtrer_canaux_det(recherche, canaux_sel, domaines_data, filtre_type):
+        return _filtrer_canaux_logic(recherche, canaux_sel, domaines_data,
+                                     'canal-checkbox-det', filtre_type)
+
+    # ── Active tab highlighting ───────────────────────────────────────────
+    @app.callback(
+        Output({'type': 'btn-vue', 'index': dash.ALL}, 'style'),
+        Input('store-vue', 'data'),
+        State({'type': 'btn-vue', 'index': dash.ALL}, 'id'),
+    )
+    def highlight_tabs(vue_active, ids):
+        return [_tab_style(item['index'] == vue_active) for item in ids]
+
+    @app.callback(
+        Output({'type': 'btn-vue-det', 'index': dash.ALL}, 'style'),
+        Input('store-vue-det', 'data'),
+        State({'type': 'btn-vue-det', 'index': dash.ALL}, 'id'),
+    )
+    def highlight_tabs_det(vue_active, ids):
+        return [_tab_style(item['index'] == vue_active) for item in ids]
 
     # ── Chargement MDF session 2 ──────────────────────────────────────────
     @app.callback(
@@ -583,9 +607,29 @@ def _maj_vue_logic(ctx, ids, filename, canaux_sel, store_key):
     return dash.no_update
 
 
-def _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, type_checkbox):
+def _tab_style(actif):
+    return {
+        'fontFamily': SANS, 'fontSize': '11px', 'fontWeight': '500',
+        'color': BRIGHT if actif else DIM,
+        'background': 'none', 'border': 'none',
+        'borderBottom': f'2px solid {ACCENT}' if actif else '2px solid transparent',
+        'padding': '0 12px',
+        'height': '36px',
+        'cursor': 'pointer',
+        'letterSpacing': '0.01em',
+        'display': 'flex', 'alignItems': 'center',
+    }
+
+
+def _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, type_checkbox, filtre_type=None):
     if not domaines_data: return []
     canaux = sorted(set(c for d in domaines_data.values() for c in d['tous_canaux']))
+    if filtre_type is not None:
+        show_raw  = 'raw'  in filtre_type
+        show_math = 'math' in filtre_type
+        canaux = [c for c in canaux
+                  if (c.startswith('MATH_') and show_math)
+                  or (not c.startswith('MATH_') and show_raw)]
     if recherche:
         canaux = [c for c in canaux if recherche.lower() in c.lower()]
     return _liste_canaux_html(canaux, canaux_sel or [], domaines_data, type_checkbox)

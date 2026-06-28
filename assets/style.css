@@ -1,0 +1,114 @@
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0d0d0d;
+  color: #d0d0d0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+/* ── Tab buttons hover ───────────────────────────────────────────────────── */
+button[id*="btn-vue"]:hover {
+  color: #d0d0d0 !important;
+}
+
+/* ── Sidebar channel items hover ─────────────────────────────────────────── */
+div[id*="canal-item"]:hover {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+/* ── Topbar action links hover ───────────────────────────────────────────── */
+span[id*="btn-"]:hover,
+span[id*="export"]:hover {
+  color: #d0d0d0 !important;
+}
+
+/* ── Upload area ─────────────────────────────────────────────────────────── */
+.dash-upload:hover span {
+  color: #d0d0d0 !important;
+}
+
+/* ── Plotly chart borders ────────────────────────────────────────────────── */
+.js-plotly-plot .plotly .main-svg {
+  border-radius: 4px;
+}
+
+/* ── Dash checklist styling ──────────────────────────────────────────────── */
+.form-check-input:checked {
+  background-color: #E31837;
+  border-color: #E31837;
+}
+
+/* ── Selection highlight ─────────────────────────────────────────────────── */
+::selection { background: #E3183733; }
+
+/* ── Loading overlay ─────────────────────────────────────────────────────── */
+._dash-loading-callback {
+  position: fixed;
+  top: 36px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  background: #E31837;
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+  z-index: 9999;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ── KPI card ────────────────────────────────────────────────────────────── */
+.kpi-card {
+  background: #161616;
+  border: 1px solid #222;
+  border-radius: 4px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpi-label {
+  font-size: 10px;
+  color: #5a5a5a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'Segoe UI', sans-serif;
+}
+.kpi-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: #efefef;
+  font-family: 'Consolas', monospace;
+  line-height: 1.1;
+}
+.kpi-unit {
+  font-size: 11px;
+  color: #5a5a5a;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* ── Section header ──────────────────────────────────────────────────────── */
+.section-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #3a3a3a;
+  padding: 16px 16px 6px;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* ── Alert row ───────────────────────────────────────────────────────────── */
+.alert-row {
+  border-left: 3px solid #c03030 !important;
+  background: #1a0a0a !important;
+}

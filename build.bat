@@ -32,6 +32,7 @@ pyinstaller --noconfirm --onefile ^
     --name "FormUL_Analyzer" ^
     --add-data "views;views" ^
     --add-data "utils;utils" ^
+    --add-data "assets;assets" ^
     --add-data "constants.py;." ^
     --add-data "ui.py;." ^
     --add-data "callbacks.py;." ^

@@ -151,6 +151,8 @@ def _get_signal(mdf, canaux_disponibles, noms):
 
 
 def _resample(t_ref, t_src, s_src):
+    if len(t_src) == 0 or len(s_src) == 0 or len(t_ref) == 0:
+        return np.full(len(t_ref), np.nan)
     return np.interp(t_ref, t_src, s_src)
 
 
@@ -158,10 +160,12 @@ def _essayer_combo(mdf, canaux_disponibles, combo):
     sigs, t_ref = {}, None
     for c in combo:
         t, s = _get_signal(mdf, canaux_disponibles, [c])
-        if t is None:
+        if t is None or len(t) == 0 or len(s) == 0:
             return None, None
         if t_ref is None:
             t_ref = t
+        if len(t_ref) == 0:
+            return None, None
         sigs[c] = _resample(t_ref, t, s)
     return t_ref, sigs
 
