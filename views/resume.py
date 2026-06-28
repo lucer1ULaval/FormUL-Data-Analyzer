@@ -1,6 +1,6 @@
 import numpy as np
 from dash import html
-from constants import BG, BG3, BG4, BG5, BORDER, BORDER2, MONO, SANS, DIM, TEXT, ROUGE
+from constants import BG, BG3, BG4, BG5, BORDER, BORDER2, MONO, SANS, DIM, TEXT, ROUGE, ORANGE
 
 
 def fmt(val):
@@ -24,36 +24,76 @@ def calculer_stats(mdf, canaux_cles, plage=None):
                 s = s[mask]
             if len(s) == 0: continue
             stats[canal] = {
-                'min': float(s.min()), 'max': float(s.max()),
-                'mean': float(s.mean()), 'unit': sig.unit or ''
+                'min':  float(s.min()),
+                'max':  float(s.max()),
+                'mean': float(s.mean()),
+                'std':  float(s.std()),
+                'unit': sig.unit or '',
             }
         except Exception:
             continue
     return stats
 
 
-def construire_resume(stats, label):
+def _verifier_seuil(canal, stats, seuils):
+    """Retourne (couleur_alerte, texte_alerte) si une limite est dépassée."""
+    s = seuils.get(canal, {})
+    if not s:
+        return None, ''
+    v = stats['mean']
+    vmax = stats['max']
+    vmin = stats['min']
+    alertes = []
+    if 'max' in s and vmax > s['max']:
+        alertes.append(f"MAX {s['max']} exceeded ({fmt(vmax)})")
+    if 'min' in s and vmin < s['min']:
+        alertes.append(f"MIN {s['min']} not met ({fmt(vmin)})")
+    if alertes:
+        return ROUGE, ' | '.join(alertes)
+    return None, ''
+
+
+def construire_resume(stats, label, seuils=None):
     from ui import msg
     if not stats:
         return msg("No key channels found for this file")
 
+    seuils = seuils or {}
+
+    # Compter les alertes
+    nb_alertes = sum(
+        1 for c, v in stats.items()
+        if _verifier_seuil(c, v, seuils)[0] is not None
+    )
+
     # En-tête
+    alerte_hdr = []
+    if nb_alertes > 0:
+        alerte_hdr.append(html.Span(
+            f"  ⚠ {nb_alertes} threshold{'s' if nb_alertes > 1 else ''} exceeded",
+            style={'fontFamily': SANS, 'fontSize': '10px', 'color': ROUGE,
+                   'marginLeft': '12px'}
+        ))
+
     header = html.Div([
-        html.Span(label, style={
-            'fontFamily': SANS, 'fontSize': '11px', 'color': DIM,
-        }),
+        html.Span(label, style={'fontFamily': SANS, 'fontSize': '11px', 'color': DIM}),
+        *alerte_hdr,
     ], style={
         'padding': '4px 10px', 'background': BG5,
         'borderBottom': f'1px solid {BORDER}',
+        'display': 'flex', 'alignItems': 'center',
     })
 
-    # En-tête colonnes
     col_hdr = html.Div([
         html.Div("Channel", style={
             'fontFamily': SANS, 'fontSize': '10px', 'color': '#3a3a3a',
             'flex': '2', 'paddingLeft': '8px',
         }),
         html.Div("Avg", style={
+            'fontFamily': SANS, 'fontSize': '10px', 'color': '#3a3a3a',
+            'flex': '1', 'textAlign': 'right',
+        }),
+        html.Div("Std", style={
             'fontFamily': SANS, 'fontSize': '10px', 'color': '#3a3a3a',
             'flex': '1', 'textAlign': 'right',
         }),
@@ -71,7 +111,7 @@ def construire_resume(stats, label):
         }),
         html.Div("Range", style={
             'fontFamily': SANS, 'fontSize': '10px', 'color': '#3a3a3a',
-            'width': '80px', 'paddingRight': '8px',
+            'width': '90px', 'paddingRight': '8px',
         }),
     ], style={
         'display': 'flex', 'alignItems': 'center',
@@ -81,36 +121,61 @@ def construire_resume(stats, label):
 
     lignes = []
     for i, (canal, v) in enumerate(stats.items()):
-        bg = BG3 if i % 2 == 0 else '#1d1d1d'
-        vmin, vmax, vmoy = v['min'], v['max'], v['mean']
+        bg_base = BG3 if i % 2 == 0 else '#1d1d1d'
+        vmin, vmax, vmoy, vstd = v['min'], v['max'], v['mean'], v.get('std', 0)
         plage_val = vmax - vmin
         pct = (vmoy - vmin) / plage_val * 100 if plage_val > 0 else 50
 
-        # Couleur de la valeur moyenne selon position dans la plage
-        if pct > 85:   c_val = '#c06060'
-        elif pct < 15: c_val = '#6090c0'
-        else:           c_val = TEXT
+        # Vérifier les seuils
+        couleur_alerte, texte_alerte = _verifier_seuil(canal, v, seuils)
+        bg = '#1a0a0a' if couleur_alerte else bg_base
 
-        # Barre miniature inline
+        # Couleur valeur moyenne selon position
+        if couleur_alerte:
+            c_val = ROUGE
+        elif pct > 85:
+            c_val = '#c06060'
+        elif pct < 15:
+            c_val = '#6090c0'
+        else:
+            c_val = TEXT
+
         barre = html.Div([
             html.Div(style={
                 'width': f'{pct:.0f}%', 'height': '100%',
-                'background': '#3a6a3a' if pct < 70 else ('#8a6030' if pct < 85 else '#8a3a3a'),
+                'background': '#8a3a3a' if couleur_alerte else
+                              ('#8a6030' if pct >= 85 else '#3a6a3a'),
             })
         ], style={
-            'width': '70px', 'height': '6px', 'background': '#1a1a1a',
+            'width': '78px', 'height': '6px', 'background': '#1a1a1a',
             'display': 'inline-block', 'verticalAlign': 'middle',
         })
 
+        alerte_badge = []
+        if couleur_alerte:
+            alerte_badge.append(html.Span("⚠", title=texte_alerte, style={
+                'color': ROUGE, 'fontSize': '10px', 'marginLeft': '4px',
+                'cursor': 'help',
+            }))
+
         lignes.append(html.Div([
-            html.Div(canal, title=canal, style={
-                'fontFamily': SANS, 'fontSize': '11px', 'color': TEXT,
-                'flex': '2', 'paddingLeft': '8px',
-                'overflow': 'hidden', 'textOverflow': 'ellipsis', 'whiteSpace': 'nowrap',
+            html.Div([
+                html.Span(canal, title=texte_alerte or canal, style={
+                    'fontFamily': SANS, 'fontSize': '11px', 'color': TEXT,
+                    'overflow': 'hidden', 'textOverflow': 'ellipsis', 'whiteSpace': 'nowrap',
+                }),
+                *alerte_badge,
+            ], style={
+                'flex': '2', 'paddingLeft': '8px', 'display': 'flex',
+                'alignItems': 'center', 'overflow': 'hidden',
             }),
             html.Div(fmt(vmoy), style={
                 'fontFamily': MONO, 'fontSize': '12px', 'color': c_val,
                 'flex': '1', 'textAlign': 'right', 'fontWeight': '500',
+            }),
+            html.Div(fmt(vstd), style={
+                'fontFamily': MONO, 'fontSize': '10px', 'color': '#3a4a5a',
+                'flex': '1', 'textAlign': 'right',
             }),
             html.Div(fmt(vmin), style={
                 'fontFamily': MONO, 'fontSize': '11px', 'color': '#4a7a4a',
@@ -125,13 +190,14 @@ def construire_resume(stats, label):
                 'width': '40px', 'textAlign': 'right', 'paddingRight': '8px',
             }),
             html.Div(barre, style={
-                'width': '80px', 'display': 'flex', 'alignItems': 'center',
+                'width': '90px', 'display': 'flex', 'alignItems': 'center',
                 'paddingRight': '8px',
             }),
         ], style={
             'display': 'flex', 'alignItems': 'center',
             'padding': '5px 0', 'background': bg,
             'borderBottom': f'1px solid {BORDER2}',
+            'borderLeft': f'2px solid {ROUGE}' if couleur_alerte else '2px solid transparent',
         }))
 
     return html.Div([header, col_hdr, *lignes])

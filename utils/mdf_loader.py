@@ -14,18 +14,16 @@ def charger_mdf(chemin_mdf, config):
 
     domaines = {}
     for nom_domaine, infos in config["domaines"].items():
-        canaux_cles = infos.get("canaux_cles", [])
+        canaux_cles   = infos.get("canaux_cles", [])
+        prefixes      = infos.get("prefixes", [])
         canaux_trouves = [c for c in canaux_cles if c in canaux_disponibles]
-
-        prefixes = infos.get("prefixes", [])
-        tous_canaux_domaine = [
+        tous_canaux    = sorted(
             c for c in canaux_disponibles
             if any(c.startswith(p) for p in prefixes)
-        ]
-
+        )
         domaines[nom_domaine] = {
             "canaux_cles": canaux_trouves,
-            "tous_canaux": sorted(tous_canaux_domaine),
+            "tous_canaux": tous_canaux,
         }
 
     flags_erreur = [
@@ -38,30 +36,11 @@ def charger_mdf(chemin_mdf, config):
 
 def signal_vers_dataframe(mdf, nom_canal):
     try:
-        sig = mdf.get(nom_canal)
+        sig     = mdf.get(nom_canal)
         samples = sig.samples
         if hasattr(samples, 'dtype') and samples.dtype.byteorder == '>':
             samples = samples.byteswap().view(samples.dtype.newbyteorder('<'))
-        df = pd.DataFrame({
-            "timestamp": sig.timestamps,
-            nom_canal: samples,
-        })
-        return df, sig.unit
+        df = pd.DataFrame({"timestamp": sig.timestamps, nom_canal: samples})
+        return df, sig.unit or ''
     except Exception:
-        return None, ""
-
-
-def stats_session(mdf, canaux_cles):
-    stats = {}
-    for canal in canaux_cles:
-        try:
-            sig = mdf.get(canal)
-            stats[canal] = {
-                "min": float(sig.samples.min()),
-                "max": float(sig.samples.max()),
-                "mean": float(sig.samples.mean()),
-                "unit": sig.unit,
-            }
-        except Exception:
-            continue
-    return stats
+        return None, ''

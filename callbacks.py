@@ -4,7 +4,7 @@ import base64, tempfile, os, json
 import asammdf
 import pandas as pd
 
-from constants import MONO, SANS, DIM, TEXT, BORDER, BG, COULEURS, ROUGE, ORANGE
+from constants import MONO, SANS, DIM, TEXT, BORDER, BG, COULEURS
 from ui import msg, layout_principal, layout_vue_libre
 from utils.mdf_loader import charger_config, charger_mdf, signal_vers_dataframe
 from fault_detection import detecter_flags_erreur, calculer_zones_faute, identifier_declencheurs
@@ -14,7 +14,9 @@ from views.resume import calculer_stats, construire_resume
 from views.erreurs import construire_erreurs
 from views.math_view import construire_math_view
 from views.heatmap import construire_heatmap
+from views.energie import construire_energie
 from views.comparaison import construire_comparaison_upload, construire_overlay
+from views.motors import construire_motors
 
 config = charger_config()
 CACHE_FILE  = 'cache_session.json'
@@ -22,10 +24,28 @@ LAYOUTS_DIR = 'layouts'
 os.makedirs(LAYOUTS_DIR, exist_ok=True)
 
 
-def _zones_et_decl(mdf, flags_erreur, fault_codes):
+# ── Helpers partagés ──────────────────────────────────────────────────────────
+
+def _charger_session(contents, filename):
+    """Décode un upload MDF → (chemin_tmp, domaines_data, flags_erreur)."""
+    _, b64 = contents.split(',')
+    decoded = base64.b64decode(b64)
+    suffix = os.path.splitext(filename)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+        f.write(decoded)
+        chemin_tmp = f.name
+    mdf, domaines, _, canaux_disponibles = charger_mdf(chemin_tmp, config)
+    flags_erreur = detecter_flags_erreur(mdf, canaux_disponibles)
+    mdf.close()
+    return chemin_tmp, dict(domaines), flags_erreur
+
+
+def _zones_et_decl(mdf, flags_erreur):
+    fault_codes = config.get('fault_codes', {})
     zones = calculer_zones_faute(mdf, flags_erreur or [])
     decl  = identifier_declencheurs(mdf, flags_erreur or [], zones, fault_codes)
     return zones, decl
+
 
 def _t_max(mdf, flags_erreur, default=300):
     t = default
@@ -34,6 +54,7 @@ def _t_max(mdf, flags_erreur, default=300):
         except: pass
     return t
 
+
 def _charger_layout(filename):
     path = os.path.join(LAYOUTS_DIR, filename.replace('/', '_') + '.json')
     if os.path.exists(path):
@@ -41,44 +62,123 @@ def _charger_layout(filename):
             return json.load(f)
     return None
 
+
 def _sauvegarder_layout(filename, canaux, vue):
     path = os.path.join(LAYOUTS_DIR, filename.replace('/', '_') + '.json')
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({'canaux': canaux, 'vue': vue}, f)
 
-def _construire_vue(vue, mdf, canaux_disponibles, flags_erreur, fault_codes,
+
+def _statusbar_content(plage):
+    def s(t): return html.Span(t, style={'fontFamily': SANS, 'fontSize': '10px', 'color': DIM})
+    if plage:
+        return [s(f"t  {plage['debut']:.2f} → {plage['fin']:.2f} s"),
+                s(f"Δ {plage['fin']-plage['debut']:.2f} s")]
+    return [s("Full session")]
+
+
+def _construire_vue(vue, mdf, canaux_disponibles, flags_erreur,
                     canaux_sel, domaines_data, plage):
+    fault_codes = config.get('fault_codes', {})
     if vue == 'graphes':
         if not canaux_sel:
             return msg("Select channels in the sidebar")
-        zones, decl = _zones_et_decl(mdf, flags_erreur, fault_codes)
+        zones, decl = _zones_et_decl(mdf, flags_erreur)
         return construire_graphes(mdf, canaux_sel, zones, decl)
     elif vue == 'resume':
         canaux_cles = [c for d in (domaines_data or {}).values()
                        for c in d.get('canaux_cles', []) if c in canaux_disponibles]
         stats = calculer_stats(mdf, canaux_cles, plage)
         label = f"{plage['debut']:.1f}s → {plage['fin']:.1f}s" if plage else "Full Session"
-        return construire_resume(stats, label)
+        return construire_resume(stats, label, config.get('seuils', {}))
     elif vue == 'erreurs':
-        zones, decl = _zones_et_decl(mdf, flags_erreur, fault_codes)
+        zones, decl = _zones_et_decl(mdf, flags_erreur)
         return construire_erreurs(zones, decl, flags_erreur or [])
     elif vue == 'math':
-        zones, decl = _zones_et_decl(mdf, flags_erreur, fault_codes)
+        zones, decl = _zones_et_decl(mdf, flags_erreur)
         resultats = calculer_math_channels(mdf, canaux_disponibles)
         return construire_math_view(resultats, zones, decl, _t_max(mdf, flags_erreur))
     elif vue == 'heatmap':
         return construire_heatmap(mdf, canaux_disponibles)
+    elif vue == 'energie':
+        return construire_energie(mdf, canaux_disponibles, plage)
+    elif vue == 'motors':
+        return construire_motors(mdf, canaux_disponibles)
     elif vue == 'comparaison':
         return construire_comparaison_upload()
     else:
         return msg(f"{vue} — coming soon")
 
-def _liste_canaux_html(canaux, sel, type_checkbox='canal-checkbox'):
+
+def _liste_canaux_html(canaux, sel, domaines_data=None, type_checkbox='canal-checkbox'):
+    """Génère la liste HTML des canaux, groupés par domaine si disponible."""
+    items = []
+
+    if domaines_data:
+        # Construire la map canal → domaine
+        canal_domaine = {}
+        for nom_dom, infos in domaines_data.items():
+            for c in infos.get('tous_canaux', []):
+                canal_domaine[c] = nom_dom
+
+        # Grouper les canaux par domaine
+        groupes = {}
+        sans_domaine = []
+        for c in canaux:
+            dom = canal_domaine.get(c)
+            if dom:
+                groupes.setdefault(dom, []).append(c)
+            else:
+                sans_domaine.append(c)
+
+        domaine_couleurs = {
+            'Batterie':  '#5b9bd5',
+            'Moteurs':   '#70ad47',
+            'Thermique': '#ed7d31',
+            'Pedales':   '#ffc000',
+            'Systeme':   '#9b59b6',
+        }
+
+        for dom, canaux_dom in groupes.items():
+            couleur_dom = domaine_couleurs.get(dom, '#555')
+            nb_sel = sum(1 for c in canaux_dom if c in (sel or []))
+            items.append(html.Div([
+                html.Div(style={
+                    'width': '3px', 'background': couleur_dom,
+                    'alignSelf': 'stretch', 'flexShrink': '0',
+                }),
+                html.Span(dom, style={
+                    'fontFamily': SANS, 'fontSize': '9px', 'color': couleur_dom,
+                    'letterSpacing': '0.08em', 'flex': '1',
+                    'padding': '0 4px',
+                }),
+                html.Span(f"{nb_sel}/{len(canaux_dom)}", style={
+                    'fontFamily': MONO, 'fontSize': '9px', 'color': '#3a3a3a',
+                    'paddingRight': '6px',
+                }),
+            ], style={
+                'display': 'flex', 'alignItems': 'center',
+                'padding': '4px 0', 'background': '#151515',
+                'borderBottom': f'1px solid #202020',
+                'borderTop': f'1px solid #202020',
+                'marginTop': '2px',
+            }))
+            items.extend(_canaux_items(canaux_dom, sel, type_checkbox))
+
+        if sans_domaine:
+            items.extend(_canaux_items(sans_domaine, sel, type_checkbox))
+    else:
+        items.extend(_canaux_items(canaux, sel, type_checkbox))
+
+    return items
+
+
+def _canaux_items(canaux, sel, type_checkbox):
     items = []
     for c in canaux:
-        idx = sel.index(c) if c in sel else -1
+        idx = sel.index(c) if c in (sel or []) else -1
         couleur = COULEURS[idx % len(COULEURS)] if idx >= 0 else None
-        est_sel = c in sel
+        est_sel = c in (sel or [])
         items.append(html.Div([
             html.Div(style={
                 'width': '3px', 'alignSelf': 'stretch', 'flexShrink': '0',
@@ -128,21 +228,12 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def charger_fichier(contents, filename):
-        if not contents:
-            return [dash.no_update] * 4
-        _, b64 = contents.split(',')
-        decoded = base64.b64decode(b64)
-        suffix = os.path.splitext(filename)[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-            f.write(decoded); chemin_tmp = f.name
-        mdf, domaines, _, canaux_disponibles = charger_mdf(chemin_tmp, config)
-        flags_erreur = detecter_flags_erreur(mdf, canaux_disponibles)
-        mdf.close()
-        domaines_data = dict(domaines)
+        if not contents: return [dash.no_update] * 4
+        chemin, domaines, flags = _charger_session(contents, filename)
         with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump({'chemin_mdf': chemin_tmp, 'domaines': domaines_data,
-                       'flags_erreur': flags_erreur, 'filename': filename}, f)
-        return chemin_tmp, domaines_data, flags_erreur, filename
+            json.dump({'chemin_mdf': chemin, 'domaines': domaines,
+                       'flags_erreur': flags, 'filename': filename}, f)
+        return chemin, domaines, flags, filename
 
     # ── Chargement MDF détaché ────────────────────────────────────────────
     @app.callback(
@@ -155,17 +246,9 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def charger_fichier_det(contents, filename):
-        if not contents:
-            return [dash.no_update] * 4
-        _, b64 = contents.split(',')
-        decoded = base64.b64decode(b64)
-        suffix = os.path.splitext(filename)[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-            f.write(decoded); chemin_tmp = f.name
-        mdf, domaines, _, canaux_disponibles = charger_mdf(chemin_tmp, config)
-        flags_erreur = detecter_flags_erreur(mdf, canaux_disponibles)
-        mdf.close()
-        return chemin_tmp, dict(domaines), flags_erreur, filename
+        if not contents: return [dash.no_update] * 4
+        chemin, domaines, flags = _charger_session(contents, filename)
+        return chemin, domaines, flags, filename
 
     # ── Canaux principale ─────────────────────────────────────────────────
     @app.callback(
@@ -180,22 +263,8 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def maj_canaux(mdf_path, values_list, btn_desel, ids, sel_actuel, filename, vue):
-        ctx = dash.callback_context
-        if not ctx.triggered: return dash.no_update
-        trigger = ctx.triggered[0]['prop_id']
-        if 'store-mdf-path' in trigger:
-            layout = _charger_layout(filename) if filename else None
-            return layout['canaux'] if layout else []
-        if 'btn-deselectionner' in trigger:
-            if filename: _sauvegarder_layout(filename, [], vue or 'graphes')
-            return []
-        sel = list(sel_actuel or [])
-        for values, id_item in zip(values_list, ids):
-            canal = id_item['index']
-            if values and canal not in sel: sel.append(canal)
-            elif not values and canal in sel: sel.remove(canal)
-        if filename: _sauvegarder_layout(filename, sel, vue or 'graphes')
-        return sel
+        return _maj_canaux_logic(dash.callback_context, values_list, btn_desel,
+                                 ids, sel_actuel, filename, vue, 'store-mdf-path')
 
     # ── Vue principale ────────────────────────────────────────────────────
     @app.callback(
@@ -208,18 +277,7 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def maj_vue(mdf_path, n_clicks_list, ids, filename, canaux_sel):
-        ctx = dash.callback_context
-        if not ctx.triggered: return dash.no_update
-        trigger = ctx.triggered[0]['prop_id']
-        if 'store-mdf-path' in trigger:
-            layout = _charger_layout(filename) if filename else None
-            return layout['vue'] if layout else 'graphes'
-        for id_item in ids:
-            if id_item['index'] in trigger:
-                vue = id_item['index']
-                if filename: _sauvegarder_layout(filename, canaux_sel or [], vue)
-                return vue
-        return dash.no_update
+        return _maj_vue_logic(dash.callback_context, ids, filename, canaux_sel, 'store-mdf-path')
 
     # ── Canaux détachés ───────────────────────────────────────────────────
     @app.callback(
@@ -234,22 +292,8 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def maj_canaux_det(mdf_path, values_list, btn_desel, ids, sel_actuel, filename, vue):
-        ctx = dash.callback_context
-        if not ctx.triggered: return dash.no_update
-        trigger = ctx.triggered[0]['prop_id']
-        if 'store-mdf-path-det' in trigger:
-            layout = _charger_layout(filename) if filename else None
-            return layout['canaux'] if layout else []
-        if 'btn-deselectionner-det' in trigger:
-            if filename: _sauvegarder_layout(filename, [], vue or 'graphes')
-            return []
-        sel = list(sel_actuel or [])
-        for values, id_item in zip(values_list, ids):
-            canal = id_item['index']
-            if values and canal not in sel: sel.append(canal)
-            elif not values and canal in sel: sel.remove(canal)
-        if filename: _sauvegarder_layout(filename, sel, vue or 'graphes')
-        return sel
+        return _maj_canaux_logic(dash.callback_context, values_list, btn_desel,
+                                 ids, sel_actuel, filename, vue, 'store-mdf-path-det')
 
     # ── Vue détachée ──────────────────────────────────────────────────────
     @app.callback(
@@ -262,18 +306,7 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def maj_vue_det(mdf_path, n_clicks_list, ids, filename, canaux_sel):
-        ctx = dash.callback_context
-        if not ctx.triggered: return dash.no_update
-        trigger = ctx.triggered[0]['prop_id']
-        if 'store-mdf-path-det' in trigger:
-            layout = _charger_layout(filename) if filename else None
-            return layout['vue'] if layout else 'graphes'
-        for id_item in ids:
-            if id_item['index'] in trigger:
-                vue = id_item['index']
-                if filename: _sauvegarder_layout(filename, canaux_sel or [], vue)
-                return vue
-        return dash.no_update
+        return _maj_vue_logic(dash.callback_context, ids, filename, canaux_sel, 'store-mdf-path-det')
 
     # ── Liste canaux principale ───────────────────────────────────────────
     @app.callback(
@@ -284,11 +317,7 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def filtrer_canaux(recherche, canaux_sel, domaines_data):
-        if not domaines_data: return []
-        canaux = sorted(set(c for d in domaines_data.values() for c in d['tous_canaux']))
-        if recherche:
-            canaux = [c for c in canaux if recherche.lower() in c.lower()]
-        return _liste_canaux_html(canaux, canaux_sel or [], 'canal-checkbox')
+        return _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, 'canal-checkbox')
 
     # ── Liste canaux détachée ─────────────────────────────────────────────
     @app.callback(
@@ -299,11 +328,7 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def filtrer_canaux_det(recherche, canaux_sel, domaines_data):
-        if not domaines_data: return []
-        canaux = sorted(set(c for d in domaines_data.values() for c in d['tous_canaux']))
-        if recherche:
-            canaux = [c for c in canaux if recherche.lower() in c.lower()]
-        return _liste_canaux_html(canaux, canaux_sel or [], 'canal-checkbox-det')
+        return _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, 'canal-checkbox-det')
 
     # ── Chargement MDF session 2 ──────────────────────────────────────────
     @app.callback(
@@ -319,7 +344,8 @@ def register_callbacks(app):
         decoded = base64.b64decode(b64)
         suffix = os.path.splitext(filename)[1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-            f.write(decoded); chemin_tmp = f.name
+            f.write(decoded)
+            chemin_tmp = f.name
         return chemin_tmp, filename
 
     # ── Overlay comparaison ───────────────────────────────────────────────
@@ -371,18 +397,16 @@ def register_callbacks(app):
         if not chemin_mdf: return msg("Open an MDF file to begin")
         ctx = dash.callback_context
         trigger = ctx.triggered[0]['prop_id'] if ctx.triggered else ''
-        # Canaux changent → seulement si vue graphes
         if 'store-canaux-selectionnes' in trigger and vue != 'graphes':
             return dash.no_update
-        # Heatmap → ne recharger que si changement de vue ou de MDF
-        if vue == 'heatmap' and trigger not in ('store-mdf-path.data', 'store-vue.data'):
+        if vue in ('heatmap', 'energie', 'motors') and trigger not in (
+                'store-mdf-path.data', 'store-vue.data'):
             return dash.no_update
         mdf = asammdf.MDF(chemin_mdf)
         canaux_disponibles = set(mdf.channels_db.keys())
-        fault_codes = config.get('fault_codes', {})
         try:
             contenu = _construire_vue(vue, mdf, canaux_disponibles, flags_erreur,
-                                      fault_codes, canaux_sel, domaines_data, plage)
+                                      canaux_sel, domaines_data, plage)
         except Exception as e:
             import traceback; print(traceback.format_exc())
             contenu = msg(f"Error: {e}")
@@ -405,7 +429,8 @@ def register_callbacks(app):
         trigger = ctx.triggered[0]['prop_id'] if ctx.triggered else ''
         if 'store-canaux-selectionnes-det' in trigger and vue != 'graphes':
             return dash.no_update
-        if vue == 'heatmap' and trigger not in ('store-mdf-path-det.data', 'store-vue-det.data'):
+        if vue in ('heatmap', 'energie', 'motors') and trigger not in (
+                'store-mdf-path-det.data', 'store-vue-det.data'):
             return dash.no_update
         if not chemin_mdf and os.path.exists(CACHE_FILE):
             with open(CACHE_FILE, 'r') as f:
@@ -417,17 +442,16 @@ def register_callbacks(app):
             return msg("Open an MDF file to begin")
         mdf = asammdf.MDF(chemin_mdf)
         canaux_disponibles = set(mdf.channels_db.keys())
-        fault_codes = config.get('fault_codes', {})
         try:
             contenu = _construire_vue(vue, mdf, canaux_disponibles, flags_erreur,
-                                      fault_codes, canaux_sel, domaines_data, plage)
+                                      canaux_sel, domaines_data, plage)
         except Exception as e:
             import traceback; print(traceback.format_exc())
             contenu = msg(f"Error: {e}")
         mdf.close()
         return contenu
 
-    # ── Absorber les events zoom/pan de la heatmap ────────────────────────
+    # ── Absorber events heatmap ───────────────────────────────────────────
     @app.callback(
         Output('graphe-heatmap-temps', 'config'),
         Input('graphe-heatmap-temps', 'relayoutData'),
@@ -443,12 +467,7 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def sync_plage(relayoutData):
-        if not relayoutData: return dash.no_update
-        if 'xaxis.range[0]' in relayoutData:
-            return {'debut': relayoutData['xaxis.range[0]'],
-                    'fin':   relayoutData['xaxis.range[1]']}
-        if 'xaxis.autorange' in relayoutData: return None
-        return dash.no_update
+        return _sync_plage_logic(relayoutData)
 
     # ── Sync plage détachée ───────────────────────────────────────────────
     @app.callback(
@@ -458,38 +477,24 @@ def register_callbacks(app):
         allow_duplicate=True
     )
     def sync_plage_det(relayoutData):
-        if not relayoutData: return dash.no_update
-        if 'xaxis.range[0]' in relayoutData:
-            return {'debut': relayoutData['xaxis.range[0]'],
-                    'fin':   relayoutData['xaxis.range[1]']}
-        if 'xaxis.autorange' in relayoutData: return None
-        return dash.no_update
+        return _sync_plage_logic(relayoutData)
 
-    # ── Statusbar principale ──────────────────────────────────────────────
+    # ── Statusbars ────────────────────────────────────────────────────────
     @app.callback(
         Output('statusbar-content', 'children'),
         Input('store-plage', 'data'),
         Input('store-mdf-path', 'data'),
     )
-    def update_statusbar(plage, chemin_mdf):
-        def s(t): return html.Span(t, style={'fontFamily': SANS, 'fontSize': '10px', 'color': DIM})
-        if plage:
-            return [s(f"t  {plage['debut']:.2f} → {plage['fin']:.2f} s"),
-                    s(f"Δ {plage['fin']-plage['debut']:.2f} s")]
-        return [s("Full Session")]
+    def update_statusbar(plage, _):
+        return _statusbar_content(plage)
 
-    # ── Statusbar détachée ────────────────────────────────────────────────
     @app.callback(
         Output('statusbar-content-det', 'children'),
         Input('store-plage-det', 'data'),
         Input('store-mdf-path-det', 'data'),
     )
-    def update_statusbar_det(plage, chemin_mdf):
-        def s(t): return html.Span(t, style={'fontFamily': SANS, 'fontSize': '10px', 'color': DIM})
-        if plage:
-            return [s(f"t  {plage['debut']:.2f} → {plage['fin']:.2f} s"),
-                    s(f"Δ {plage['fin']-plage['debut']:.2f} s")]
-        return [s("Full Session")]
+    def update_statusbar_det(plage, _):
+        return _statusbar_content(plage)
 
     # ── Export CSV ────────────────────────────────────────────────────────
     @app.callback(
@@ -542,3 +547,54 @@ def register_callbacks(app):
             except Exception:
                 pass
         return dash.no_update
+
+
+# ── Logique partagée (hors register_callbacks) ────────────────────────────────
+
+def _maj_canaux_logic(ctx, values_list, btn_desel, ids, sel_actuel, filename, vue, store_key):
+    if not ctx.triggered: return dash.no_update
+    trigger = ctx.triggered[0]['prop_id']
+    if store_key in trigger:
+        layout = _charger_layout(filename) if filename else None
+        return layout['canaux'] if layout else []
+    if 'btn-deselectionner' in trigger:
+        if filename: _sauvegarder_layout(filename, [], vue or 'graphes')
+        return []
+    sel = list(sel_actuel or [])
+    for values, id_item in zip(values_list, ids):
+        canal = id_item['index']
+        if values and canal not in sel: sel.append(canal)
+        elif not values and canal in sel: sel.remove(canal)
+    if filename: _sauvegarder_layout(filename, sel, vue or 'graphes')
+    return sel
+
+
+def _maj_vue_logic(ctx, ids, filename, canaux_sel, store_key):
+    if not ctx.triggered: return dash.no_update
+    trigger = ctx.triggered[0]['prop_id']
+    if store_key in trigger:
+        layout = _charger_layout(filename) if filename else None
+        return layout['vue'] if layout else 'graphes'
+    for id_item in ids:
+        if id_item['index'] in trigger:
+            vue = id_item['index']
+            if filename: _sauvegarder_layout(filename, canaux_sel or [], vue)
+            return vue
+    return dash.no_update
+
+
+def _filtrer_canaux_logic(recherche, canaux_sel, domaines_data, type_checkbox):
+    if not domaines_data: return []
+    canaux = sorted(set(c for d in domaines_data.values() for c in d['tous_canaux']))
+    if recherche:
+        canaux = [c for c in canaux if recherche.lower() in c.lower()]
+    return _liste_canaux_html(canaux, canaux_sel or [], domaines_data, type_checkbox)
+
+
+def _sync_plage_logic(relayoutData):
+    if not relayoutData: return dash.no_update
+    if 'xaxis.range[0]' in relayoutData:
+        return {'debut': relayoutData['xaxis.range[0]'],
+                'fin':   relayoutData['xaxis.range[1]']}
+    if 'xaxis.autorange' in relayoutData: return None
+    return dash.no_update

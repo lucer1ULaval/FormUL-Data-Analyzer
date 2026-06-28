@@ -19,7 +19,9 @@ ACCENT  = '#5a9fd4'
 ROUGE   = '#c04040'
 ORANGE  = '#b07828'
 VERT    = '#4a8a4a'
+JAUNE   = '#c8a020'
 
+# Couleurs traces session principale
 COULEURS = [
     '#5b9bd5',
     '#70ad47',
@@ -30,7 +32,7 @@ COULEURS = [
     '#e06070',
 ]
 
-# Couleurs session 2 pour comparaison (versions desaturées/tiretées)
+# Couleurs traces session 2 (desaturées)
 COULEURS_S2 = [
     '#2d6fa8',
     '#4a7a30',
@@ -41,13 +43,24 @@ COULEURS_S2 = [
     '#a04050',
 ]
 
+# Couleurs par domaine (sidebar groups)
+COULEURS_DOMAINES = {
+    'Batterie':  '#5b9bd5',
+    'Moteurs':   '#70ad47',
+    'Thermique': '#ed7d31',
+    'Pedales':   '#ffc000',
+    'Systeme':   '#9b59b6',
+}
+
 VUES = [
-    {'label': 'channels',   'value': 'graphes',     'icon': 'ti-chart-line'},
-    {'label': 'summary',    'value': 'resume',      'icon': 'ti-layout-grid'},
-    {'label': 'faults',     'value': 'erreurs',     'icon': 'ti-alert-triangle'},
-    {'label': 'analysis',   'value': 'math',        'icon': 'ti-math-function'},
-    {'label': 'heatmap',    'value': 'heatmap',     'icon': 'ti-battery'},
-    {'label': 'compare',    'value': 'comparaison', 'icon': 'ti-arrows-diff'},
+    {'label': 'channels',  'value': 'graphes'},
+    {'label': 'summary',   'value': 'resume'},
+    {'label': 'faults',    'value': 'erreurs'},
+    {'label': 'analysis',  'value': 'math'},
+    {'label': 'heatmap',   'value': 'heatmap'},
+    {'label': 'energy',    'value': 'energie'},
+    {'label': 'motors',    'value': 'motors'},
+    {'label': 'compare',   'value': 'comparaison'},
 ]
 
 MOTS_CLES_ERREUR    = ['ERROR', 'ERR', 'FAULT', 'FAIL', 'BSPD', 'ALARM', 'WARN']

@@ -1,16 +1,33 @@
 @echo off
-echo === FormUL Analyzer - Build ===
+echo ================================================
+echo   FormUL Analyzer — Build
+echo ================================================
 echo.
 
 cd /d "%~dp0"
 
+if not exist ".venv\Scripts\activate.bat" (
+    echo [ERREUR] Environnement virtuel introuvable (.venv)
+    echo Cree-le avec: python -m venv .venv
+    pause
+    exit /b 1
+)
+
 call .venv\Scripts\activate.bat
 
-echo Installation de PyInstaller...
-pip install pyinstaller --quiet
+echo [1/4] Mise a jour de PyInstaller...
+pip install pyinstaller --quiet --upgrade
+if errorlevel 1 (
+    echo [ERREUR] Installation de PyInstaller echouee
+    pause
+    exit /b 1
+)
 
-echo.
-echo Compilation...
+echo [2/4] Nettoyage des anciens builds...
+if exist "dist\FormUL_Analyzer.exe" del /f "dist\FormUL_Analyzer.exe"
+if exist "build" rmdir /s /q "build" 2>nul
+
+echo [3/4] Compilation...
 pyinstaller --noconfirm --onefile ^
     --name "FormUL_Analyzer" ^
     --add-data "views;views" ^
@@ -27,6 +44,7 @@ pyinstaller --noconfirm --onefile ^
     --hidden-import "asammdf.blocks.mdf_v4" ^
     --hidden-import "plotly" ^
     --hidden-import "plotly.graph_objects" ^
+    --hidden-import "plotly.subplots" ^
     --hidden-import "dash" ^
     --hidden-import "dash.dcc" ^
     --hidden-import "dash.html" ^
@@ -38,17 +56,31 @@ pyinstaller --noconfirm --onefile ^
     --hidden-import "webview.platforms.winforms" ^
     --hidden-import "clr" ^
     --collect-all "webview" ^
+    --collect-all "dash" ^
+    --collect-all "plotly" ^
     launcher.py
 
-echo.
-if exist "dist\FormUL_Analyzer.exe" (
-    echo Copie des fichiers de configuration...
-    copy config.yaml dist\config.yaml
-    mkdir dist\layouts 2>nul
+if errorlevel 1 (
     echo.
-    echo === Build reussi ===
-    echo Executable: dist\FormUL_Analyzer.exe
-) else (
-    echo === ERREUR - Build echoue ===
+    echo [ERREUR] Compilation echouee - verifiez les erreurs ci-dessus
+    pause
+    exit /b 1
 )
+
+echo [4/4] Copie des fichiers de configuration...
+if exist "dist\FormUL_Analyzer.exe" (
+    copy /y config.yaml dist\config.yaml >nul
+    if not exist "dist\layouts" mkdir dist\layouts
+    echo.
+    echo ================================================
+    echo   Build reussi !
+    echo   Executable: dist\FormUL_Analyzer.exe
+    echo ================================================
+) else (
+    echo [ERREUR] Executable introuvable apres compilation
+    pause
+    exit /b 1
+)
+
+echo.
 pause

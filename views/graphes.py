@@ -1,7 +1,8 @@
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dash import dcc
-from constants import BG, TEXT, SANS, COULEURS
+from dash import dcc, html
+from constants import BG, TEXT, SANS, MONO, COULEURS
 from utils.mdf_loader import signal_vers_dataframe
 
 
@@ -71,17 +72,29 @@ def construire_graphes(mdf, canaux_sel, zones_faute, declencheurs):
 
         _zones(fig, zones_faute, declencheurs, i, y0, y1, t_min, t_max)
 
+        vals = df[canal].values.astype(float)
+        ts   = df['timestamp'].values
+
+        # Statistiques inline (min / max / mean)
+        if len(vals) > 0:
+            stat_txt = (f"avg {vals.mean():.4g}  "
+                        f"min {vals.min():.4g}  "
+                        f"max {vals.max():.4g}  {unit}")
+        else:
+            stat_txt = ''
+
         fig.add_trace(
             go.Scatter(
-                x=df['timestamp'].values,
-                y=df[canal].values.astype(float),
+                x=ts,
+                y=vals,
                 mode='lines', name=canal,
                 line=dict(color=couleur, width=1.0),
                 hovertemplate=(
                     f'<span style="font-family:Consolas">'
                     f'<b>{canal}</b><br>t = %{{x:.3f}} s<br>'
                     f'%{{y:.4g}} {unit}</span><extra></extra>'
-                )
+                ),
+                customdata=[[stat_txt]] * len(ts),
             ),
             row=i+1, col=1
         )
@@ -92,7 +105,7 @@ def construire_graphes(mdf, canaux_sel, zones_faute, declencheurs):
             zeroline=True, zerolinecolor='#282828', zerolinewidth=1,
             tickfont=dict(family='Consolas, monospace', size=10, color='#555'),
             title_font=dict(family='Arial, sans-serif', size=10, color='#444'),
-            fixedrange=True,
+            fixedrange=False,  # Y-axis zoom activé
         )
 
     h = max(200, 160 * n)
@@ -130,7 +143,14 @@ def construire_graphes(mdf, canaux_sel, zones_faute, declencheurs):
                 'drawrect', 'eraseshape',
             ],
             'displaylogo': False,
-            'scrollZoom': False,
+            'scrollZoom': True,
+            'toImageButtonOptions': {
+                'format': 'png',
+                'filename': 'formul_channels',
+                'height': h,
+                'width': 1400,
+                'scale': 2,
+            },
         },
         style={'height': f'{h}px'}
     )

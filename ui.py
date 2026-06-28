@@ -9,27 +9,30 @@ def msg(t):
     })
 
 
+def _btn_vue(v, detache):
+    return html.Button(
+        v['label'],
+        id={'type': 'btn-vue-det' if detache else 'btn-vue', 'index': v['value']},
+        n_clicks=0,
+        style={
+            'fontFamily': SANS, 'fontSize': '11px', 'color': DIM,
+            'background': 'none', 'border': 'none',
+            'padding': '0 8px', 'height': '26px',
+            'cursor': 'pointer',
+        }
+    )
+
+
 def topbar(detache=False):
+    sep = html.Span('|', style={'color': '#222', 'fontSize': '10px', 'padding': '0 1px'})
     onglets = []
     for i, v in enumerate(VUES):
         if i > 0:
-            onglets.append(html.Span('|', style={
-                'color': '#222', 'fontSize': '10px', 'padding': '0 1px'
-            }))
-        onglets.append(html.Button(
-            v['label'],
-            id={'type': 'btn-vue-det' if detache else 'btn-vue', 'index': v['value']},
-            n_clicks=0,
-            style={
-                'fontFamily': SANS, 'fontSize': '11px', 'color': DIM,
-                'background': 'none', 'border': 'none',
-                'padding': '0 8px', 'height': '26px',
-                'cursor': 'pointer',
-            }
-        ))
+            onglets.append(sep)
+        onglets.append(_btn_vue(v, detache))
 
-    upload_id = 'upload-mdf-det' if detache else 'upload-mdf'
-    label_id  = 'label-session-det' if detache else 'label-session'
+    upload_id  = 'upload-mdf-det' if detache else 'upload-mdf'
+    label_id   = 'label-session-det' if detache else 'label-session'
     vue_btn_id = 'btn-nouvelle-vue-det' if detache else 'btn-nouvelle-vue'
 
     return html.Div([
@@ -40,7 +43,7 @@ def topbar(detache=False):
             'height': '26px', 'display': 'flex', 'alignItems': 'center',
         }),
         html.Span(
-            "detached" if detache else "",
+            "detached",
             style={
                 'fontFamily': SANS, 'fontSize': '10px', 'color': '#333',
                 'padding': '0 8px', 'borderRight': f'1px solid {BORDER}',
@@ -51,6 +54,8 @@ def topbar(detache=False):
             'fontFamily': SANS, 'fontSize': '11px', 'color': DIM,
             'padding': '0 12px', 'borderRight': f'1px solid {BORDER}',
             'height': '26px', 'display': 'flex', 'alignItems': 'center',
+            'maxWidth': '260px', 'overflow': 'hidden', 'textOverflow': 'ellipsis',
+            'whiteSpace': 'nowrap',
         }),
         html.Div(onglets, style={
             'display': 'flex', 'alignItems': 'center', 'padding': '0 4px',
@@ -71,7 +76,6 @@ def topbar(detache=False):
                 'height': '26px', 'display': 'flex', 'alignItems': 'center',
                 'borderLeft': f'1px solid {BORDER}',
             }) if not detache else html.Span(),
-            # Export CSV (statusbar intégrée dans topbar droite)
             html.Span("↓ CSV", id='btn-export-csv', n_clicks=0, style={
                 'fontFamily': SANS, 'fontSize': '11px', 'color': DIM,
                 'cursor': 'pointer', 'padding': '0 10px',
@@ -90,7 +94,9 @@ def topbar(detache=False):
 def sidebar(detache=False):
     suffix = '-det' if detache else ''
     return html.Div([
-        dcc.Input(id=f'input-recherche{suffix}', placeholder='Filter channels...',
+        dcc.Input(
+            id=f'input-recherche{suffix}',
+            placeholder='Filter channels...',
             style={
                 'width': '100%', 'background': BG3,
                 'border': 'none', 'borderBottom': f'1px solid {BORDER}',
@@ -105,7 +111,7 @@ def sidebar(detache=False):
             'borderBottom': f'1px solid {BORDER}',
         }),
         html.Div(id=f'liste-canaux{suffix}',
-            style={'overflowY': 'auto', 'flex': '1'}),
+                 style={'overflowY': 'auto', 'flex': '1'}),
     ], style={
         'width': '170px', 'minWidth': '170px', 'background': BG3,
         'borderRight': f'1px solid {BORDER}',
@@ -138,7 +144,6 @@ def layout_principal():
 
 
 def layout_vue_libre():
-    """Vue détachée — app complète indépendante."""
     return html.Div([
         topbar(detache=True),
         html.Div([
